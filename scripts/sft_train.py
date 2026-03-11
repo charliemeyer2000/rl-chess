@@ -57,7 +57,7 @@ def main():
         logging_steps=10,
         save_steps=500,
         save_total_limit=2,
-        max_seq_length=512,
+        max_length=512,
         report_to="wandb",
         run_name="chess-sft",
     )

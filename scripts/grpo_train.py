@@ -61,7 +61,6 @@ def main():
         warmup_ratio=0.1,
         max_steps=args.max_steps,
         max_completion_length=384,
-        max_prompt_length=512,
         beta=0.0,
         reward_weights=[0.1, 0.4, 0.5],
         bf16=True,
