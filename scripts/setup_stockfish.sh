@@ -21,7 +21,9 @@ curl -sL "https://github.com/official-stockfish/Stockfish/archive/refs/tags/sf_1
 
 cd "$TMPDIR/Stockfish-sf_17/src"
 echo "Compiling Stockfish (this takes ~2 minutes)..."
-make -j$(nproc) build ARCH=x86-64-avx2 2>&1 | tail -5
+make -j$(nproc) build ARCH=x86-64-avx2 \
+    EXTRACXXFLAGS="-static-libstdc++ -static-libgcc" \
+    EXTRALDFLAGS="-static-libstdc++ -static-libgcc" 2>&1 | tail -5
 
 cp stockfish "$STOCKFISH_PATH"
 chmod +x "$STOCKFISH_PATH"
