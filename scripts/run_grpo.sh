@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+pip install vllm 2>&1 | tail -3
+
 CHECKPOINTS_BASE=$(dirname "$RV_CHECKPOINT_DIR")
 SFT_MODEL_PATH="$CHECKPOINTS_BASE/chess-sft/merged"
 
