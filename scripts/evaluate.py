@@ -96,21 +96,24 @@ def play_game(model, tokenizer, client, engine, max_moves=80):
         else:
             move_uci, _ = get_gpt4o_move(client, fen)
 
+        player = "us" if board.turn == our_color else "gpt4o"
+
         if move_uci is None:
-            result = "illegal_move"
-            moves.append({"fen": fen, "move": None, "player": "us" if board.turn == our_color else "gpt4o"})
+            result = "win" if player == "gpt4o" else "loss"
+            moves.append({"fen": fen, "move": None, "player": player, "illegal": True})
             break
 
         try:
             move = chess.Move.from_uci(move_uci)
             if move not in board.legal_moves:
-                result = "illegal_move"
-                moves.append({"fen": fen, "move": move_uci, "player": "us" if board.turn == our_color else "gpt4o", "illegal": True})
+                result = "win" if player == "gpt4o" else "loss"
+                moves.append({"fen": fen, "move": move_uci, "player": player, "illegal": True})
                 break
             board.push(move)
-            moves.append({"fen": fen, "move": move_uci, "player": "us" if board.turn == our_color else "gpt4o"})
+            moves.append({"fen": fen, "move": move_uci, "player": player})
         except (ValueError, chess.InvalidMoveError):
-            result = "illegal_move"
+            result = "win" if player == "gpt4o" else "loss"
+            moves.append({"fen": fen, "move": move_uci, "player": player, "illegal": True})
             break
     else:
         result = "draw_by_length"
@@ -204,7 +207,10 @@ def main():
     wins = sum(1 for g in game_results if g["result"] == "win")
     losses = sum(1 for g in game_results if g["result"] == "loss")
     draws = sum(1 for g in game_results if g["result"] in ("draw", "draw_by_length"))
-    gpt4o_illegals = sum(1 for g in game_results if g["result"] == "illegal_move" and g.get("moves", [{}])[-1].get("player") == "gpt4o")
+    wins_by_illegal = sum(
+        1 for g in game_results
+        if g["result"] == "win" and g.get("moves", [{}])[-1].get("illegal")
+    )
 
     summary = {
         "model_path": args.model_path,
@@ -213,7 +219,7 @@ def main():
             "wins": wins,
             "losses": losses,
             "draws": draws,
-            "gpt4o_illegal_moves": gpt4o_illegals,
+            "wins_by_opponent_illegal": wins_by_illegal,
             "total": args.num_games,
             "win_rate": wins / args.num_games,
         },
@@ -222,6 +228,8 @@ def main():
     print("\n=== Summary ===")
     print(f"Puzzles: {puzzle_results['legal_rate']:.1%} legal, {puzzle_results['avg_score']:.1f} avg cp")
     print(f"vs GPT-4o: {wins}W / {losses}L / {draws}D (win rate: {wins/args.num_games:.1%})")
+    if wins_by_illegal:
+        print(f"  ({wins_by_illegal} wins from opponent illegal moves)")
 
     results_path = os.path.join(OUTPUT_DIR, "eval_results.json")
     with open(results_path, "w") as f:

@@ -52,7 +52,8 @@ def main():
     config = GRPOConfig(
         output_dir=output_dir,
         use_vllm=True,
-        vllm_mode="server",
+        vllm_mode="colocate",
+        vllm_gpu_memory_utilization=0.4,
         num_generations=args.num_generations,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=4,
