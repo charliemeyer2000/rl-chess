@@ -81,7 +81,7 @@ def evaluate_move(engine, board, move_uci):
         return {"legal": False, "score": None}
 
 
-def play_game(model, tokenizer, client, engine, max_moves=80):
+def play_game(model, tokenizer, client, engine, max_moves=80, max_retries=10):
     board = chess.Board()
     our_color = chess.WHITE
     moves = []
@@ -91,30 +91,35 @@ def play_game(model, tokenizer, client, engine, max_moves=80):
             break
 
         fen = board.fen()
-        if board.turn == our_color:
-            move_uci, _ = get_model_move(model, tokenizer, fen)
-        else:
-            move_uci, _ = get_gpt4o_move(client, fen)
-
         player = "us" if board.turn == our_color else "gpt4o"
 
-        if move_uci is None:
+        # Give each player up to max_retries attempts to make a legal move
+        legal_move = None
+        for attempt in range(max_retries):
+            if player == "us":
+                move_uci, _ = get_model_move(model, tokenizer, fen)
+            else:
+                move_uci, _ = get_gpt4o_move(client, fen)
+
+            if move_uci is not None:
+                try:
+                    candidate = chess.Move.from_uci(move_uci)
+                    if candidate in board.legal_moves:
+                        legal_move = candidate
+                        break
+                except (ValueError, chess.InvalidMoveError):
+                    pass
+
+        if legal_move is None:
             result = "win" if player == "gpt4o" else "loss"
-            moves.append({"fen": fen, "move": None, "player": player, "illegal": True})
+            moves.append({"fen": fen, "move": None, "player": player, "illegal": True, "retries": max_retries})
             break
 
-        try:
-            move = chess.Move.from_uci(move_uci)
-            if move not in board.legal_moves:
-                result = "win" if player == "gpt4o" else "loss"
-                moves.append({"fen": fen, "move": move_uci, "player": player, "illegal": True})
-                break
-            board.push(move)
-            moves.append({"fen": fen, "move": move_uci, "player": player})
-        except (ValueError, chess.InvalidMoveError):
-            result = "win" if player == "gpt4o" else "loss"
-            moves.append({"fen": fen, "move": move_uci, "player": player, "illegal": True})
-            break
+        board.push(legal_move)
+        move_data = {"fen": fen, "move": legal_move.uci(), "player": player}
+        if attempt > 0:
+            move_data["retries"] = attempt
+        moves.append(move_data)
     else:
         result = "draw_by_length"
 
@@ -211,6 +216,10 @@ def main():
         1 for g in game_results
         if g["result"] == "win" and g.get("moves", [{}])[-1].get("illegal")
     )
+    opponent_retries = sum(
+        m.get("retries", 0) for g in game_results for m in g.get("moves", [])
+        if m.get("player") == "gpt4o"
+    )
 
     summary = {
         "model_path": args.model_path,
@@ -220,6 +229,7 @@ def main():
             "losses": losses,
             "draws": draws,
             "wins_by_opponent_illegal": wins_by_illegal,
+            "opponent_retries": opponent_retries,
             "total": args.num_games,
             "win_rate": wins / args.num_games,
         },
@@ -228,8 +238,9 @@ def main():
     print("\n=== Summary ===")
     print(f"Puzzles: {puzzle_results['legal_rate']:.1%} legal, {puzzle_results['avg_score']:.1f} avg cp")
     print(f"vs GPT-4o: {wins}W / {losses}L / {draws}D (win rate: {wins/args.num_games:.1%})")
+    print(f"  (GPT-4o needed {opponent_retries} total retries for illegal moves)")
     if wins_by_illegal:
-        print(f"  ({wins_by_illegal} wins from opponent illegal moves)")
+        print(f"  ({wins_by_illegal} wins from opponent exhausting all retries)")
 
     results_path = os.path.join(OUTPUT_DIR, "eval_results.json")
     with open(results_path, "w") as f:
