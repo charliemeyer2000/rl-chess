@@ -8,3 +8,6 @@ build/
 .ipynb_checkpoints/
 uv.lock
 .pipeline_monitor.*
+web/node_modules/
+web/.next/
+web/.env.local
