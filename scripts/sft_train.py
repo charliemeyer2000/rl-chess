@@ -48,15 +48,15 @@ def main():
     training_args = SFTConfig(
         output_dir=output_dir,
         num_train_epochs=3,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=4,
+        per_device_train_batch_size=16,
+        gradient_accumulation_steps=2,
         learning_rate=2e-4,
         lr_scheduler_type="cosine",
         warmup_ratio=0.1,
         bf16=True,
         logging_steps=10,
-        save_steps=500,
-        save_total_limit=2,
+        save_steps=250,
+        save_total_limit=3,
         max_length=512,
         report_to="wandb",
         run_name="chess-sft",
@@ -70,8 +70,19 @@ def main():
         peft_config=lora_config,
     )
 
+    # Resume from checkpoint if one exists (e.g., after timeout)
+    resume = None
+    if os.path.isdir(output_dir):
+        checkpoints = sorted(
+            [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")],
+            key=lambda x: int(x.split("-")[1]),
+        )
+        if checkpoints:
+            resume = os.path.join(output_dir, checkpoints[-1])
+            print(f"Resuming from checkpoint: {resume}")
+
     print("Starting SFT training...")
-    trainer.train()
+    trainer.train(resume_from_checkpoint=resume)
 
     print(f"Saving adapter to {output_dir}")
     trainer.save_model()

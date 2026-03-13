@@ -33,17 +33,19 @@ What we're attempting to do here is teach some small language model, in this cas
 
 ### Strategy
 
-1. **Data Prep** — Download Lichess puzzles (rated 1200-2200), extract positions + best moves, and create 15K SFT + 5K GRPO training examples.
-2. **SFT (Supervised Fine-Tuning)** — Teach the model our chess prompt format (FEN + legal moves → `<move>` tags) and basic strategy using LoRA. Takes ~1.5h on 1x A100.
-3. **GRPO (Reinforcement Learning)** — Have the model play against itself, scored by a progressive reward function (format → legality → Stockfish quality). Uses vLLM in colocate mode on 1x A100, ~20-30 min for 500 steps.
+1. **Data Prep** — Download Lichess puzzles (rated 1200-2200), extract positions + best moves, and create 30K SFT (15K general + 10K mating + 5K endgame) + 5K GRPO training examples.
+2. **SFT (Supervised Fine-Tuning)** — Teach the model our chess prompt format (FEN + legal moves → `<move>` tags) and basic strategy using LoRA. Takes ~50 min on 1x H100.
+3. **GRPO (Reinforcement Learning)** — Have the model play against itself, scored by a progressive reward function (format → legality → Stockfish depth-16 quality). Uses vLLM in colocate mode on 1x H100, ~35 min for 1000 steps.
 4. **Evaluation** — Test on held-out puzzles (legal move rate, Stockfish score) and play full games vs GPT-4o.
 5. **Play Against It** — Serve the model with vLLM and play in the browser via the Next.js web app in `web/`.
 
 ### Results
 
-- **100% legal move rate** on 100 held-out puzzles
-- **~1100 avg centipawn** Stockfish score
-- **90% win rate vs GPT-4o** (9W/0L/1D — most wins from GPT-4o making illegal moves)
+- **100% legal move rate** on 100 held-out puzzles — our model never makes an illegal move
+- **0W/5L/5D vs GPT-4o** with fair evaluation (each player gets 10 retries for illegal moves, 200-move limit with natural draw rules)
+- GPT-4o needed 58 total retries for illegal moves — our model needed 0
+- GPT-4o wins on strategic play; our model draws via repetition but can't deliver checkmate
+- Demonstrates that **legality ≠ winning** — fundamental improvements to training data and reward design are needed (see [Areas for Improvement](#areas-for-improvement))
 
 ### Project Structure
 
@@ -65,6 +67,17 @@ web/                  # Next.js app to play chess against the model in the brows
 - `rivanna-run.ipynb` — example of this with UVA HPC (using `rv` cli)
 - `modal-run.ipynb` — example of this with modal
 - `cluster.ipynb` — example of this on a regular node (assuming some GPU-accelerated node, detects cuda/mps)
+
+### Future Research Directions
+
+1. **Game-outcome rewards** — Instead of scoring individual moves with Stockfish, play full games during GRPO and reward wins/draws/losses. This gives the model a signal for multi-move planning and endgame conversion.
+2. **Full game transcripts in SFT** — Include complete grandmaster games (from the Lichess game database, not just puzzles) so the model sees opening → middlegame → endgame → checkmate as a coherent arc.
+3. **Game history in the prompt** — Pass the move history (or last N moves) alongside the FEN so the model can maintain strategic continuity across moves.
+4. **Endgame tablebases** — For positions with ≤7 pieces, there's a mathematically perfect answer. Include these as training data for basic endgame technique (K+R vs K, pawn promotion, etc.).
+5. **Smarter reward shaping** — Add a checkmate bonus, material advantage component, or weight endgame positions higher in the quality reward.
+6. **Curriculum learning** — Start GRPO with easy endgame positions, then gradually increase difficulty.
+7. **Scale up** — Larger base models (14B, 32B), more SFT data (30K → 100K+), more GRPO steps (1000 → 5000+), multi-GPU training.
+8. **Better evaluation** — Play against Stockfish at various Elo levels, measure actual Elo rating, evaluate opening/middlegame/endgame separately.
 
 ### Playing Against Your Model
 

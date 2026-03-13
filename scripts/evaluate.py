@@ -81,13 +81,13 @@ def evaluate_move(engine, board, move_uci):
         return {"legal": False, "score": None}
 
 
-def play_game(model, tokenizer, client, engine, max_moves=80, max_retries=10):
+def play_game(model, tokenizer, client, engine, max_moves=200, max_retries=10):
     board = chess.Board()
     our_color = chess.WHITE
     moves = []
 
     for move_num in range(max_moves):
-        if board.is_game_over():
+        if board.is_game_over() or board.can_claim_draw():
             break
 
         fen = board.fen()
@@ -123,12 +123,12 @@ def play_game(model, tokenizer, client, engine, max_moves=80, max_retries=10):
     else:
         result = "draw_by_length"
 
-    if board.is_game_over():
+    if board.is_game_over() or board.can_claim_draw():
         outcome = board.outcome()
-        if outcome.winner == our_color:
-            result = "win"
-        elif outcome.winner is None:
+        if outcome is None or outcome.winner is None:
             result = "draw"
+        elif outcome.winner == our_color:
+            result = "win"
         else:
             result = "loss"
 

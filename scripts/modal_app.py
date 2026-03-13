@@ -69,10 +69,10 @@ def data_prep():
 
 @app.function(
     image=image,
-    gpu="A100-80GB",
+    gpu="H100",
     volumes={VOL_MOUNT: vol},
     secrets=secrets,
-    timeout=10800,
+    timeout=14400,
 )
 def sft_train():
     vol.reload()
@@ -85,7 +85,7 @@ def sft_train():
 
 @app.function(
     image=image,
-    gpu="A100-80GB",
+    gpu="H100",
     volumes={VOL_MOUNT: vol},
     secrets=secrets,
     timeout=10800,
@@ -116,10 +116,10 @@ def grpo_train():
 
 @app.function(
     image=image,
-    gpu="A100-80GB",
+    gpu="H100",
     volumes={VOL_MOUNT: vol},
     secrets=secrets,
-    timeout=3600,
+    timeout=7200,
 )
 def evaluate():
     vol.reload()
@@ -160,7 +160,7 @@ VLLM_PORT = 8000
 
 @app.function(
     image=image,
-    gpu="A100-80GB",
+    gpu="H100",
     volumes={VOL_MOUNT: vol},
     scaledown_window=15 * 60,
     timeout=10 * 60,

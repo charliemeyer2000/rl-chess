@@ -8,10 +8,15 @@ from datasets import load_dataset, Dataset
 from rewards import SYSTEM_PROMPT
 
 DATA_DIR = os.path.join(f"/scratch/{os.environ['USER']}", "rl-chess", "data")
-SFT_SIZE = 15_000
+SFT_GENERAL = 15_000
+SFT_MATING = 10_000
+SFT_ENDGAME = 5_000
 GRPO_SIZE = 5_000
 MIN_RATING = 1200
 MAX_RATING = 2200
+
+MATING_THEMES = {"mateIn1", "mateIn2", "mateIn3", "backRankMate", "smotheredMate"}
+ENDGAME_THEMES = {"endgame", "pawnEndgame", "rookEndgame", "knightEndgame", "bishopEndgame", "promotion"}
 
 
 def process_puzzle(row):
@@ -71,6 +76,21 @@ def build_grpo_example(example):
     }
 
 
+def collect_puzzles(dataset, theme_filter, limit):
+    """Collect puzzles matching a theme filter."""
+    results = []
+    for row in dataset:
+        raw = row.get("Themes", "")
+        themes = set(raw) if isinstance(raw, list) else set(raw.split())
+        if theme_filter(themes):
+            result = process_puzzle(row)
+            if result is not None:
+                results.append(result)
+            if len(results) >= limit:
+                break
+    return results
+
+
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
     print("Loading Lichess puzzles dataset...")
@@ -85,19 +105,32 @@ def main():
 
     filtered = filtered.shuffle(seed=42)
 
-    print("Processing puzzles...")
-    processed = []
-    for row in filtered:
-        result = process_puzzle(row)
-        if result is not None:
-            processed.append(result)
-        if len(processed) >= SFT_SIZE + GRPO_SIZE:
-            break
+    # Collect diverse puzzle types
+    print(f"Collecting {SFT_MATING} mating puzzles...")
+    mating = collect_puzzles(filtered, lambda t: bool(t & MATING_THEMES), SFT_MATING)
+    print(f"  Got {len(mating)} mating puzzles")
 
-    print(f"Processed {len(processed)} valid puzzles")
+    print(f"Collecting {SFT_ENDGAME} endgame puzzles...")
+    endgame = collect_puzzles(filtered, lambda t: bool(t & ENDGAME_THEMES), SFT_ENDGAME)
+    print(f"  Got {len(endgame)} endgame puzzles")
 
-    sft_data = processed[:SFT_SIZE]
-    grpo_data = processed[SFT_SIZE : SFT_SIZE + GRPO_SIZE]
+    # Use FENs from themed puzzles to avoid duplicates in general set
+    themed_fens = {p["fen"] for p in mating + endgame}
+    print(f"Collecting {SFT_GENERAL + GRPO_SIZE} general puzzles...")
+    general = collect_puzzles(
+        filtered,
+        lambda t: True,  # any theme
+        SFT_GENERAL + GRPO_SIZE + len(themed_fens),  # over-collect to skip dupes
+    )
+    general = [p for p in general if p["fen"] not in themed_fens]
+    print(f"  Got {len(general)} general puzzles (deduplicated)")
+
+    # Build SFT dataset: general + mating + endgame
+    sft_data = general[:SFT_GENERAL] + mating + endgame
+    grpo_data = general[SFT_GENERAL : SFT_GENERAL + GRPO_SIZE]
+
+    print(f"\nSFT data: {len(sft_data)} total ({SFT_GENERAL} general + {len(mating)} mating + {len(endgame)} endgame)")
+    print(f"GRPO data: {len(grpo_data)} examples")
 
     sft_dataset = Dataset.from_list([build_sft_messages(ex) for ex in sft_data])
     sft_path = os.path.join(DATA_DIR, "sft_dataset")

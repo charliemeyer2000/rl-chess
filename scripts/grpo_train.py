@@ -25,7 +25,7 @@ def main():
         default="Qwen/Qwen2.5-7B-Instruct",
     )
     parser.add_argument("--num_generations", type=int, default=8)
-    parser.add_argument("--max_steps", type=int, default=500)
+    parser.add_argument("--max_steps", type=int, default=1000)
     parser.add_argument("--learning_rate", type=float, default=5e-6)
     args = parser.parse_args()
 

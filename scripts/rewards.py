@@ -103,7 +103,7 @@ def quality_reward(completions, fen, **kwargs):
                 rewards.append(0.0)
                 continue
             board.push(move)
-            info = engine.analyse(board, chess.engine.Limit(depth=12))
+            info = engine.analyse(board, chess.engine.Limit(depth=16))
             cp = info["score"].relative.score(mate_score=10000)
             rewards.append(1.0 / (1.0 + math.exp(0.004 * cp)))
         except (ValueError, chess.InvalidMoveError):
